@@ -1,5 +1,5 @@
 # About
-This is some experimental code to try and see if x86 64bit long mode paging structures can be detected in raw memory without knowing pml4 (PGD) positions. 
+This is some experimental code to try and see whether x86 64bit long mode paging structures can be detected in raw memory without knowing pml4 (PGD) positions. 
 
 # General Notes:
 - Paging structures as well as paging entries are handled with dataclasses. See `__init__.py`.
@@ -23,7 +23,7 @@ Note: You need a profile matching the linux kernel running in the snapshot.
 The last argument is the physical address of the PML4 used to translate `active_mm->pgd` of all the tasks in the snapshot.
 ```bash
 cd path/to/nosyms/paging_detection
-python3 extract_known_paging_structures.py --kpti ../data/dump ../data/dump_pgds.csv 39886848
+python3 extract_known_paging_structures.py --kpti ../data/dump ../data/dump_pgds.csv
 ```
 Produces:
 ```

@@ -5,7 +5,7 @@ from typing import Dict, List, DefaultDict, Tuple
 import pandas as pd
 import networkx as nx
 
-from paging_detection import ReadableMem, translate, PagingStructure, PageTypes, PAGING_STRUCTURE_SIZE, Snapshot
+from paging_detection import ReadableMem, PagingStructure, PageTypes, PAGING_STRUCTURE_SIZE, Snapshot
 from paging_detection.graphs import color_graph, add_task_info
 
 
@@ -137,11 +137,9 @@ if __name__ == "__main__":
     parser.add_argument(
         "--kpti", help="Whether the snapshot is from a kernel with KPTI enabled.", action=argparse.BooleanOptionalAction
     )
-    parser.add_argument("kernel_pgd", help="Location of a pgd mapping all process pgds.", type=int)
 
     args = parser.parse_args()
     dump_path = args.dump_path
-    kernel_pgd = args.kernel_pgd
     task_info_path = args.task_info
 
     out_pages = dump_path.with_stem(dump_path.stem + "_known_pages").with_suffix(".json")
@@ -153,26 +151,12 @@ if __name__ == "__main__":
     with open(dump_path, "rb") as f:
         mem = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
 
-    task_info = task_info[task_info["active_mm->pgd"] != -1]
-
     phy_pgds = []
     if args.kpti:
-        # https://elixir.bootlin.com/linux/latest/source/arch/x86/include/asm/pgtable.h#L1168
-        # All top-level PAGE_TABLE_ISOLATION page tables are order-1 pages (8k-aligned and 8k in size).
-        # The kernel one is at the beginning 4k and the user one is in the last 4k.
-        # To switch between them, you just need to flip the 12th bit in their addresses.
-
-        task_info["phy_kernel_pml4"] = [  # Bit 12 cleared (kernel space)
-            translate(mem, kernel_pgd, (pgd & ~(1 << 12))) for pgd in task_info["active_mm->pgd"]
-        ]
-        task_info["phy_user_pml4"] = [  # Bit 12 set (user space)
-            translate(mem, kernel_pgd, (pgd | (1 << 12))) for pgd in task_info["active_mm->pgd"]
-        ]
-        for kernel, user in task_info[["phy_kernel_pml4", "phy_user_pml4"]].itertuples(index=False):
+        for kernel, user in task_info[["phy_pgd_kernel", "phy_pgd_user"]].itertuples(index=False):
             phy_pgds.extend([kernel, user])
     else:
-        task_info["pml4"] = [translate(mem, kernel_pgd, pgd) for pgd in task_info["active_mm->pgd"]]
-        phy_pgds.extend(task_info["pml4"])
+        phy_pgds.extend(task_info["phy_pgd"])
 
     pages = read_paging_structures(mem, phy_pgds)
 
@@ -185,7 +169,7 @@ if __name__ == "__main__":
     graph, out_of_bounds = build_nx_graph(pages, len(mem))
 
     if out_of_bounds:
-        print(f"There are out of bounds entries. Saving to csv: {out_oob_entries}")
+        print(f"There are {len(out_of_bounds)} out of bounds entries. Saving to csv: {out_oob_entries}")
         oob_df = pd.DataFrame(
             out_of_bounds,
             columns=[
@@ -200,7 +184,7 @@ if __name__ == "__main__":
 
     print("Adding task info to PML4s in graph.")
 
-    graph_cols = ["phy_kernel_pml4", "phy_user_pml4", "COMM"] if args.kpti else ["pml4", "COMM"]
+    graph_cols = ["phy_pgd_kernel", "phy_pgd_user", "COMM"] if args.kpti else ["phy_pgd", "COMM"]
     graph = add_task_info(graph, task_info[graph_cols].itertuples(index=False))
     print("Adding colors to graph.")
     graph = color_graph(graph, pages)
