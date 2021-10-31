@@ -66,22 +66,29 @@ if __name__ == "__main__":
     import pathlib
 
     parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--csv-out", dest="csv_out", action="store_true", help="Print the results in csv format, suppress other prints."
+    )
     parser.add_argument("predictions", help="Snapshot JSON with predicted designations.", type=pathlib.Path)
     parser.add_argument("truths", help="Snapshot JSON with true paging structures.", type=pathlib.Path)
     args = parser.parse_args()
 
-    print("Loading page data.")
+    if not args.csv_out:
+        print("Loading page data.")
     with open(args.predictions) as f:
         predicted = Snapshot.validate(json.load(f))
 
     with open(args.truths) as f:
         truth = Snapshot.validate(json.load(f))
 
-    print("Filtering out of bound entries.")
+    if not args.csv_out:
+        print("Filtering out of bound entries.")
+
     for page in truth.pages.values():
         page.entries = {offset: entry for offset, entry in page.entries.items() if entry.target < truth.size}
 
-    print("Counting errors.")
+    if not args.csv_out:
+        print("Counting errors.")
     tp, fp, tn, fn, fnwe = calculate_errors(truth.pages, predicted.pages)
 
     truth_counts = Counter((page_type for page in truth.pages.values() for page_type in page.designations))
@@ -94,6 +101,9 @@ if __name__ == "__main__":
     summary_df["accuracy"] = (summary_df["TP"] + summary_df["TN"]) / total
     summary_df["recall"] = summary_df["TP"] / summary_df["true counts"]
     summary_df["precision"] = summary_df["TP"] / (summary_df["TP"] + summary_df["FP"])
-    print(summary_df.to_string())
 
-print("Done")
+    if not args.csv_out:
+        print(summary_df.to_string())
+        print("Done")
+    else:
+        print(summary_df.to_csv())
