@@ -1,7 +1,7 @@
 import mmap
 from functools import cached_property
 import struct
-from typing import Dict, Set, Iterable, Tuple
+from typing import Dict, Set, Iterable, Tuple, Union, List
 
 from pydantic import BaseModel
 
@@ -22,48 +22,38 @@ class EntriesView:
     def __init__(self, snapshot, page_offset: int):
         self.snapshot = snapshot
         self.page_offset: int = page_offset
+        self._present_keys = None
 
-    def __getitem__(self, entry_offset: int, use_cache=True):
+    def __getitem__(self, entry_offset: int) -> PagingEntry:
         if entry_offset % 8 != 0:
             raise KeyError
-
-        if use_cache and (entry := self.present_entries.get(entry_offset)):
-            return entry
 
         offset = self.page_offset + entry_offset
         (value,) = struct.unpack("<Q", self.snapshot.mmap[offset : offset + PAGING_ENTRY_SIZE])
         return PagingEntry(value=value)
 
     def __len__(self):
-        return len(self.present_entries)
+        return len(self.keys())
 
-    @cached_property
-    def present_entries(self) -> Dict[int, PagingEntry]:
-        return {
-            offset: entry
-            for offset in self.keys(present_only=False)
-            if (entry := self.__getitem__(offset, use_cache=False)).present
-        }
-
-    def keys(self, present_only=True) -> Iterable[int]:
+    def keys(self, present_only=True) -> Union[range, List[int]]:
+        all_offsets = range(0, PAGING_STRUCTURE_SIZE, PAGING_ENTRY_SIZE)
         if not present_only:
-            return range(0, PAGING_STRUCTURE_SIZE, PAGING_ENTRY_SIZE)
-        return self.present_entries.keys()
+            return all_offsets
+
+        if not (present_keys := self._present_keys):
+            present_keys = [offset for offset in all_offsets if self[offset].present]
+            self._present_keys = present_keys
+
+        return present_keys
 
     def __iter__(self):
         return iter(self.keys())
 
     def values(self, present_only=True) -> Iterable[PagingEntry]:
-        if not present_only:
-            for offset in self.keys(present_only=False):
-                yield self[offset]
-        return self.present_entries.values()
+        return (self[offset] for offset in self.keys(present_only=present_only))
 
     def items(self, present_only=True) -> Iterable[Tuple[int, PagingEntry]]:
-        if not present_only:
-            for offset in self.keys(present_only=False):
-                yield offset, self[offset]
-        return self.present_entries.items()
+        return ((offset, self[offset]) for offset in self.keys(present_only=present_only))
 
 
 class PageView:
