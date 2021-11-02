@@ -118,5 +118,9 @@ class MemMappedSnapshot:
     def pages(self):
         return PagesView(self)
 
+    @property
+    def size(self):
+        return len(self.mmap)
+
     def json(self):
         return self.snapshot.json()
