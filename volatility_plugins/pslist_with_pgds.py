@@ -58,10 +58,10 @@ class PsListWithPGDs(interfaces.plugins.PluginInterface):
 
     def _generator(self):
         for task, mm, active_mm in self.list_tasks(
-                self.context,
-                self.config["primary"],
-                self.config["vmlinux"],
-                filter_func=self.create_pid_filter(self.config.get("pid", None)),
+            self.context,
+            self.config["primary"],
+            self.config["vmlinux"],
+            filter_func=self.create_pid_filter(self.config.get("pid", None)),
         ):
             if task.mm:
                 # https://elixir.bootlin.com/linux/latest/source/arch/x86/include/asm/pgtable.h#L1168
@@ -72,13 +72,13 @@ class PsListWithPGDs(interfaces.plugins.PluginInterface):
                 pgd = task.mm.pgd
                 phy_pgd = self.context.layers["primary"].translate(pgd)[0]
                 try:
-                    kernel_pgd_vaddr = (pgd & ~(1 << 12))
+                    kernel_pgd_vaddr = pgd & ~(1 << 12)
                     phy_kernel_pgd = self.context.layers["primary"].translate(kernel_pgd_vaddr)[0]
                 except PagedInvalidAddressException:
                     phy_kernel_pgd = -1
 
                 try:
-                    user_pgd_vaddr = (pgd | (1 << 12))
+                    user_pgd_vaddr = pgd | (1 << 12)
                     phy_user_pgd = self.context.layers["primary"].translate(user_pgd_vaddr)[0]
                 except PagedInvalidAddressException:
                     phy_user_pgd = -1
@@ -87,11 +87,11 @@ class PsListWithPGDs(interfaces.plugins.PluginInterface):
 
     @classmethod
     def list_tasks(
-            cls,
-            context: interfaces.context.ContextInterface,
-            layer_name: str,
-            vmlinux_symbols: str,
-            filter_func: Callable[[int], bool] = lambda _: False,
+        cls,
+        context: interfaces.context.ContextInterface,
+        layer_name: str,
+        vmlinux_symbols: str,
+        filter_func: Callable[[int], bool] = lambda _: False,
     ) -> Iterable[interfaces.objects.ObjectInterface]:
         """Lists all the tasks in the primary layer.
 
