@@ -65,6 +65,10 @@ class PageView:
     def designations(self):
         return self.snapshot.designations[self.offset]
 
+    @designations.setter
+    def designations(self, value):
+        self.snapshot.designations[self.offset] = value
+
     @cached_property
     def entries(self):
         return EntriesView(self.snapshot, self.offset)
