@@ -1,28 +1,9 @@
-import mmap
 from typing import Dict
 
 import networkx as nx
 
-from paging_detection import PagingStructure, ReadableMem, PAGING_STRUCTURE_SIZE, Snapshot, max_page_addr, PageTypes
-
-
-def read_all(mem: ReadableMem) -> Dict[int, PagingStructure]:
-    """
-    Consider all 4kb pages in a mem a paging structure and create PagingStructure instances for every one of them.
-    :param mem: Memory to read from
-    :return: Dict mapping page address to instance of PagingStructure describing the underlying page
-    """
-    pages = {}
-
-    print("Reading all pages.")
-    last_progress = 0
-    for offset in range(0, len(mem), PAGING_STRUCTURE_SIZE):
-        if (prog := offset * 100 // len(mem)) != last_progress and prog % 5 == 0:
-            print(f"{prog}%")
-            last_progress = prog
-
-        pages[offset] = PagingStructure.from_mem(mem[offset : offset + PAGING_STRUCTURE_SIZE], designations=[])
-    return pages
+from paging_detection import PagingStructure, max_page_addr, PageTypes, PAGING_STRUCTURE_SIZE
+from paging_detection.mmaped import LightSnapshot, MemMappedSnapshot
 
 
 def build_nx_graph(pages: Dict[int, PagingStructure], max_paddr: int) -> nx.MultiDiGraph:
@@ -32,12 +13,19 @@ def build_nx_graph(pages: Dict[int, PagingStructure], max_paddr: int) -> nx.Mult
     :return: The resulting graph
     """
     graph = nx.MultiDiGraph()
+    # Allows nx to avoid mem reallocation for the nodes.
+    # Adds "disconnected" pages to avoid key errors.
+    graph.add_nodes_from(pages.keys())
+
+    print("Building nx graph.")
+    last_prog = 0
     for page_offset, page in pages.items():
+        if ((prog := int(100 * page_offset / snap_size)) != last_prog) and (prog % 5) == 0:
+            last_prog = prog
+            print(f"{prog} % done.")
         for entry_offset, entry in page.entries.items():
             if entry.target <= max_paddr:
                 graph.add_edge(page_offset, entry.target, entry_offset)
-
-    graph.add_nodes_from(pages.keys())  # Adds "disconnected" pages. Mostly to avoid key errors.
 
     return graph
 
@@ -59,44 +47,44 @@ if __name__ == "__main__":
     out_pages_path = dump_path.with_stem(dump_path.stem + "_all_pages").with_suffix(".json")
     out_graph_path = out_pages_path.with_suffix(".graphml")
 
-    with open(dump_path, "rb") as f:
-        mem = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
+    snap_size = dump_path.stat().st_size
 
-    pages = read_all(mem)
+    # snapshot.pages.items() only iterates over pages for which designations are stored.
+    dummy_desigs = {offset: set() for offset in range(0, snap_size, PAGING_STRUCTURE_SIZE)}
+    snapshot = MemMappedSnapshot(LightSnapshot(path=str(dump_path), designations=dummy_desigs))
 
-    max_paddr = max_page_addr(len(mem))
+    pages = snapshot.pages
+    max_paddr = max_page_addr(snap_size)
 
-    print("Building nx graph.")
     full_graph = build_nx_graph(pages, max_paddr=max_paddr)
 
-    print("Counting oob entries.")
+    last_prog = 0
+    print("Counting oob entries and invalid entries.")
+    for page_offset, page in pages.items():
+        if ((prog := int(100 * page_offset / snap_size)) != last_prog) and (prog % 5) == 0:
+            last_prog = prog
+            print(f"{prog} % done.")
+        node = full_graph.nodes[page_offset]
 
-    # oob entries point to a paging structure outside of the memories bounds.
-    # Note that a entries pointing to a data page (bit7 set or PT entry) are not out of bounds
-    for offset, page in pages.items():
         for page_type in PageTypes:
-            node = full_graph.nodes[offset]
-            node[f"oob_{page_type}"] = sum(
-                entry.target > max_paddr and not entry.target_is_data(page_type) for entry in page.entries.values()
-            )
+            # oob entries point to a paging structure outside of the memories bounds.
+            # Note that a entries pointing to a data page (bit7 set or PT entry) are never "out of bounds"
+            node[f"invalid_{page_type}"] = 0
+            # Invalid entries violate constraints.
+            # E.g. a PD entry with bit7 set pointing to an address which is not 2mb aligned.
+            node[f"oob_{page_type}"] = 0
 
-    # Invalid entries violate constraints such as PD entries with bit7 having to point to a 2mb aligned address.
-    print("Counting invalid entries.")
-    for offset, page in pages.items():
-        for page_type in PageTypes:
-            node = full_graph.nodes[offset]
-            node[f"invalid_{page_type}"] = sum(not entry.is_valid(page_type) for entry in page.entries.values())
+        for entry in page.entries.values():
+            for page_type in PageTypes:
+                if not entry.is_valid(page_type):
+                    node[f"invalid_{page_type}"] += 1
+                if entry.target > max_paddr and not entry.target_is_data(page_type):
+                    node[f"oob_{page_type}"] += 1
 
     print(f"Saving graph: {out_graph_path}")
     nx.readwrite.write_graphml(full_graph, out_graph_path)
 
-    # Keeping oob entries significantly increases the size of the pages json file.
-    print("Removing out of bound entries from page data.")
-    for page in pages.values():
-        page.entries = {offset: entry for offset, entry in page.entries.items() if entry.target <= max_paddr}
-
     print(f"Saving pages: {out_pages_path}")
-    snapshot = Snapshot(path=str(dump_path.resolve()), pages=pages, size=len(mem))
     with open(out_pages_path, "w") as f:
         f.write(snapshot.json())
 

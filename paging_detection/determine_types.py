@@ -3,7 +3,8 @@ from typing import Dict, Literal, Union
 
 import networkx as nx
 
-from paging_detection import Snapshot, PageTypes, PagingStructure, PAGE_TYPES_ORDERED
+from paging_detection import PageTypes, PagingStructure, PAGE_TYPES_ORDERED
+from paging_detection.mmaped import LightSnapshot, MemMappedSnapshot
 
 
 def get_max_path(graph: nx.MultiDiGraph, node, max_len: int, direction: Union[Literal["in"], Literal["out"]]) -> int:
@@ -110,7 +111,8 @@ if __name__ == "__main__":
 
     print(f"Loading pages: {in_pages_path}")
     with open(in_pages_path) as f:
-        snapshot = Snapshot.validate(json.load(f))
+        snapshot = MemMappedSnapshot(LightSnapshot.validate(json.load(f)))
+
     pages = snapshot.pages
 
     print("Determining possible types for all pages.")
