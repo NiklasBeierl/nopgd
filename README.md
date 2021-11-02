@@ -1,13 +1,17 @@
 # About
 This is some experimental code to try and see whether x86 64bit long mode paging structures can be detected in raw memory.
-The goal is to detect pgds (PML4s) 
+The primary use-case would be analyzing memory snapshots for which the running kernel version is not known.
+The core parts of the code are geared towards x86 but should be quite easy to adapt for similar architectures.
+So far the entire approach was only evaluated for linux kernels, some heuristics are also linux specific, but should
+hold across different version of linux.
 
 # General Notes:
-- Paging structures as well as paging entries are handled with dataclasses. See `__init__.py` 
+- Paging structures as well as paging entries are handled with dataclasses. (`nopgd.paging_detection.Snapshot`) 
   - They can be conveniently be (de)serialized to/from json.
-  - Some of these dataclasses are currently being swapped out for classes reading paging entries from the snapshot file on demand. (See mmaped.py)
-- Networkx is used to analyze the topology of the paging structures, graphs are stored as `.graphml` for use with other graph tools like gephi or Graphia.
-- Currently this entire project is focused on linux. 
+  - In most cases these dataclasses are currently being swapped out for classes reading paging entries from the mmaped memory snapshot file "on demand". (`paging_detection.mmaped.MemMappedSnapshot`), the designations of pages are then stored in a `nopgd.paging_detection.mmaped.LightSnapshot`.
+  - There is a tool for converting `Snapshot` json to `LightSnapshot` json in `./dev_utils`.
+- Networkx is used to analyze the topology of the paging structures, graphs are stored as `.graphml`.
+  - There are tools for viewing / analyzing `.graphml` files such as Gephi or Graphia.
 
 # Data flow:
 All of the python scripts use argparse. You can invoke them with `--help`.
