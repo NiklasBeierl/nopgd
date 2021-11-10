@@ -11,8 +11,8 @@ from volatility3.framework.exceptions import PagedInvalidAddressException
 
 
 class PsListWithPGDs(interfaces.plugins.PluginInterface):
-    """Lists the processes present in a particular linux memory image with the the virtual addresses of their
-    mm and active_mm as well as the corresponding values of the mm_struct->pgd"""
+    """Lists the processes present in a particular linux memory image with the virtual and physical addresses of their
+    mm->pgd (kernel and userspace)"""
 
     _required_framework_version = (1, 0, 0)
 
@@ -57,7 +57,7 @@ class PsListWithPGDs(interfaces.plugins.PluginInterface):
             return lambda _: False
 
     def _generator(self):
-        for task, mm, active_mm in self.list_tasks(
+        for task in self.list_tasks(
             self.context,
             self.config["primary"],
             self.config["vmlinux"],
@@ -83,7 +83,7 @@ class PsListWithPGDs(interfaces.plugins.PluginInterface):
                 except PagedInvalidAddressException:
                     phy_user_pgd = -1
                 name = utility.array_to_string(task.comm)
-                yield 0, (task.pid, ppid, name, phy_pgd, phy_kernel_pgd, phy_user_pgd)
+                yield 0, (task.pid, ppid, name, pgd, phy_pgd, phy_kernel_pgd, phy_user_pgd)
 
     @classmethod
     def list_tasks(
@@ -99,17 +99,17 @@ class PsListWithPGDs(interfaces.plugins.PluginInterface):
             context: The context to retrieve required elements (layers, symbol tables) from
             layer_name: The name of the layer on which to operate
             vmlinux_symbols: The name of the table containing the kernel symbols
+
         Yields:
-            3-tuples of task, mm, active_mm, the later two may be None.
+            Process objects
         """
         vmlinux = contexts.Module(context, vmlinux_symbols, layer_name, 0)
+
         init_task = vmlinux.object_from_symbol(symbol_name="init_task")
 
         for task in chain([init_task], init_task.tasks):
             if not filter_func(task):
-                mm = vmlinux.object("mm_struct", task.mm) if task.mm else None
-                active_mm = vmlinux.object("mm_struct", task.active_mm) if task.active_mm else None
-                yield task, mm, active_mm
+                yield task
 
     def run(self):
         return renderers.TreeGrid(
@@ -117,6 +117,7 @@ class PsListWithPGDs(interfaces.plugins.PluginInterface):
                 ("PID", int),
                 ("PPID", int),
                 ("COMM", str),
+                ("virt_pgd", int),
                 ("phy_pgd", int),
                 ("phy_pgd_kernel", int),
                 ("phy_pgd_user", int),
