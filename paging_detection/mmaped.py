@@ -5,17 +5,12 @@ from typing import Dict, Set, Iterable, Tuple, Union, List
 
 from pydantic import BaseModel
 
-from paging_detection import PageTypes, PAGING_STRUCTURE_SIZE, PAGING_ENTRY_SIZE, PagingEntry, Snapshot as FullSnapshot
+from paging_detection import PageTypes, PAGING_STRUCTURE_SIZE, PAGING_ENTRY_SIZE, PagingEntry
 
 
 class LightSnapshot(BaseModel):
     path: str
     designations: Dict[int, Set[PageTypes]]
-
-    @classmethod
-    def from_full_snapshot(cls, snapshot: FullSnapshot):
-        designations = {offset: page.designations for offset, page in snapshot.pages.items()}
-        return cls(path=snapshot.path, designations=designations)
 
 
 class EntriesView:

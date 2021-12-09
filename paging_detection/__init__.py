@@ -123,49 +123,12 @@ class PagingEntry(BaseModel):
             return True
 
 
-class PagingStructure(BaseModel):
-    entries: Dict[int, PagingEntry]
-    designations: Set[PageTypes] = Field(default_factory=set)
+# The class used to represent a single PagingStructure was to be implemented here,
+# Now "MemMappedSnapshots" are used everywhere, but PagingStructure was used in a lot of type-signatures
+# TODO: Rename PagingStructure to PageView and change the import everywhere
+from paging_detection.mmaped import PageView
 
-    @property
-    def valid_pml4es(self) -> Dict[int, PagingEntry]:
-        return {offset: entry for offset, entry in self.entries.items() if entry.valid_pml4e}
-
-    @property
-    def valid_pdpes(self) -> Dict[int, PagingEntry]:
-        return {offset: entry for offset, entry in self.entries.items() if entry.valid_pdpe}
-
-    @property
-    def valid_pdes(self) -> Dict[int, PagingEntry]:
-        return {offset: entry for offset, entry in self.entries.items() if entry.valid_pde}
-
-    @property
-    def valid_ptes(self) -> Dict[int, PagingEntry]:
-        return self.entries
-
-    def __getitem__(self, item):
-        start = item.start
-        end = item.stop or PAGING_STRUCTURE_SIZE
-        entries = {
-            offset: PagingEntry(value=entry.value) for offset, entry in self.entries.items() if start <= offset < end
-        }
-        return PagingStructure(entries=entries, designations=set(self.designations))
-
-    @classmethod
-    def from_mem(cls, mem: ReadableMem, designations: Iterable[PageTypes]) -> "PagingStructure":
-        assert len(mem) == PAGING_STRUCTURE_SIZE
-        entries = {}
-        for offset in range(0, PAGING_STRUCTURE_SIZE, PAGING_ENTRY_SIZE):
-            value = struct.unpack("<Q", mem[offset : offset + 8])[0]
-            if value & 1:  # Only add present entries
-                entries[offset] = PagingEntry(value=value)
-        return cls(entries=entries, designations=set(designations))
-
-
-class Snapshot(BaseModel):
-    path: str
-    pages: Dict[int, PagingStructure]
-    size: int
+PagingStructure = PageView
 
 
 def max_page_addr(mem_size: int) -> int:
