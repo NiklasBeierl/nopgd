@@ -1,25 +1,27 @@
 from collections import defaultdict, Counter
-import mmap
 from typing import Dict, List, DefaultDict, Tuple
 
 import pandas as pd
 import networkx as nx
 
-from paging_detection import ReadableMem, PagingStructure, PageTypes, PAGING_STRUCTURE_SIZE, Snapshot
+from paging_detection import PagingStructure, PageTypes, PAGING_STRUCTURE_SIZE
+from paging_detection.mmaped import LightSnapshot, MemMappedSnapshot
 from paging_detection.graphs import color_graph, add_task_info
 
 
-def read_paging_structures(mem: ReadableMem, pgds: List[int]) -> Dict[int, PagingStructure]:
+def read_paging_structures(dump_path: str, pgds: List[int]) -> MemMappedSnapshot:
     """
     Extract PagingStructure from memory. Consider every int in pgds to be an address of a PML4.
     :param mem: Memory
     :param pgds: List of physical pml4 addresses in mem
     :return: Dict mapping page address to instance of PagingStructure describing the underlying page
     """
-    pages: Dict[int, PagingStructure] = {}
+    designations = {}
+    snapshot = MemMappedSnapshot(LightSnapshot(path=dump_path, designations=designations))
+
     print("Extracting known paging structures.")
     last_progress = 0
-    for i, pml4_addr in enumerate(pgds):
+    for i, pml4_addr in enumerate(sorted(pgds)):
         if (progress := 100 * i // len(pgds)) != last_progress and (progress % 5 == 0):
             print(f"{progress}%")
             last_progress = progress
@@ -28,25 +30,20 @@ def read_paging_structures(mem: ReadableMem, pgds: List[int]) -> Dict[int, Pagin
         for page_type in PageTypes:
             next_addresses = set()  # Holds addresses of tables of the "next" table type by the end onf the iteration
             for addr in addresses:
-                if addr in pages:  # Table already parsed
-                    table = pages[addr]
-                    if page_type in table.designations:
-                        continue  # Already considered this table as page_type, nothing left to do
-                    # Not continue-ing here since we now need to consider all entries given the new page_type
+                if not addr in snapshot.designations:
+                    snapshot.designations[addr] = set()
+                table = snapshot.pages[addr]
+                if not page_type in table.designations:  # Did not consider this table as page_type yet
                     table.designations.add(page_type)
-                else:
-                    page_mem = mem[addr : addr + PAGING_STRUCTURE_SIZE]
-                    table = PagingStructure.from_mem(mem=page_mem, designations={page_type})
-                    pages[addr] = table
-                next_addresses |= {
-                    entry.target
-                    for entry in table.entries.values()
-                    # PDEs and PDPEs can point to large pages, we do not want to confuse those for paging structures
-                    if not entry.target_is_data(page_type) and entry.target < len(mem)
-                }
+                    next_addresses |= {
+                        entry.target
+                        for entry in table.entries.values()
+                        # PDEs and PDPEs can point to large pages, we do not want to confuse those for paging structures
+                        if not entry.target_is_data(page_type) and entry.target < snapshot.size
+                    }
             addresses = next_addresses
 
-    return pages
+    return snapshot
 
 
 def get_mapped_pages(pages: Dict[int, PagingStructure]) -> DefaultDict[int, bool]:
@@ -148,9 +145,6 @@ if __name__ == "__main__":
 
     task_info = pd.read_csv(task_info_path)
 
-    with open(dump_path, "rb") as f:
-        mem = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
-
     phy_pgds = []
     if args.kpti:
         for kernel, user in task_info[["phy_pgd_kernel", "phy_pgd_user"]].itertuples(index=False):
@@ -158,15 +152,14 @@ if __name__ == "__main__":
     else:
         phy_pgds.extend(task_info["phy_pgd"])
 
-    pages = read_paging_structures(mem, phy_pgds)
+    snapshot = read_paging_structures(str(dump_path), phy_pgds)
 
     print(f"Saving pages: {out_pages}")
-    snapshot = Snapshot(path=str(dump_path.resolve()), pages=pages, size=len(mem))
     with open(out_pages, "w") as f:
-        f.write(snapshot.json())
+        f.write(snapshot.snapshot.json())
 
     print("Building nx graph.")
-    graph, out_of_bounds = build_nx_graph(pages, len(mem))
+    graph, out_of_bounds = build_nx_graph(snapshot.pages, snapshot.size)
 
     if out_of_bounds:
         print(f"There are {len(out_of_bounds)} out of bounds entries. Saving to csv: {out_oob_entries}")
@@ -187,7 +180,7 @@ if __name__ == "__main__":
     graph_cols = ["phy_pgd_kernel", "phy_pgd_user", "COMM"] if args.kpti else ["phy_pgd", "COMM"]
     graph = add_task_info(graph, task_info[graph_cols].itertuples(index=False))
     print("Adding colors to graph.")
-    graph = color_graph(graph, pages)
+    graph = color_graph(graph, snapshot.pages)
 
     print(f"Saving graph: {out_graph}")
     nx.readwrite.write_graphml(graph, out_graph)
@@ -195,12 +188,12 @@ if __name__ == "__main__":
     # Below is some exploratory code, you will need a debugger / add prints to access these values.
 
     node_data = get_node_features(graph)
-    is_mapped = get_mapped_pages(pages)
-    total_mapped = sum(mapped and addr < len(mem) for addr, mapped in is_mapped.items())
+    is_mapped = get_mapped_pages(snapshot.pages)
+    total_mapped = sum(mapped and addr < snapshot.size for addr, mapped in is_mapped.items())
     # Approximate b.c. of large pages
-    app_mapped_mem_perc = total_mapped / (len(mem) / PAGING_STRUCTURE_SIZE)
+    app_mapped_mem_perc = total_mapped / (snapshot.size / PAGING_STRUCTURE_SIZE)
 
-    types_summary = Counter((is_mapped[addr], *page.designations) for addr, page in pages.items())
+    types_summary = Counter((is_mapped[addr], *page.designations) for addr, page in snapshot.pages.items())
     ambiguous_pages = sum(occ for desigs, occ in types_summary.items() if len(desigs) > 2)
 
 print("Done.")
