@@ -1,11 +1,13 @@
-from typing import Dict, Iterable, Tuple, Union
+from typing import Dict, Iterable, Tuple, Union, TypeVar
 
 import networkx as nx
 
 from paging_detection import PageTypes, PagingStructure
 
+Graph = TypeVar("Graph", bound=nx.Graph)
 
-def add_task_info(graph: nx.Graph, process_info: Iterable[Union[Tuple[int, int, str], Tuple[int, str]]]) -> nx.Graph:
+
+def add_task_info(graph: Graph, process_info: Iterable[Union[Tuple[int, int, str], Tuple[int, str]]]) -> Graph:
     """
     Add process information to nodes in a paging structure graph.
     :param graph: Paging structure graph
@@ -38,7 +40,7 @@ DESIGNATION_COLORS = {
 }
 
 
-def color_graph(graph: nx.Graph, pages: Dict[int, PagingStructure]) -> nx.Graph:
+def color_graph(graph: Graph, pages: Dict[int, PagingStructure]) -> Graph:
     """
     Color code paging structure graph according to paging structure designations.
     :param graph: Graph to add color coding to
