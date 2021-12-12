@@ -77,15 +77,14 @@ These graphs are stored as `.graphml` files, in these files:
 
 ## Data flow:
 
-At the moment the code here makes one long "pipeline" for processing a single snapshot. All python scripts can be
-invoked with `--help` for more usage info.
+At the moment the code here makes one long "pipeline" for processing a snapshot. All scripts here can be invoked with `--help` for more usage info.
 
 ### Steps:
 
-#### Get PML4 (PGD) addresses from your snapshot
+#### Get PML4 (PGD) addresses from your snapshot (Get the ground truth)
 
 Use the [`pslist_with_pgds.PsListWithPGDs`](volatility_plugins/pslist_with_pgds.py) Volatility3 plugin.
-
+(Volatility3 needs to have access to [matching symbols](https://volatility3.readthedocs.io/en/latest/symbol-tables.html) for the kernel in the snapshot)
 ```bash
 cd path/to/nosyms
 vol -p volatility_plugins/ -f data/dump -r csv pslist_with_pgds.PsListWithPGDs > data/dump_pgds.csv
