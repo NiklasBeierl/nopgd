@@ -5,7 +5,7 @@ import pandas as pd
 import networkx as nx
 
 from paging_detection import PagingStructure, PageTypes, PAGING_STRUCTURE_SIZE
-from paging_detection.mmaped import LightSnapshot, MemMappedSnapshot
+from paging_detection.mmaped import SnapshotPagingData, MemMappedSnapshot
 from paging_detection.graphs import color_graph, add_task_info
 
 
@@ -17,7 +17,7 @@ def read_paging_structures(dump_path: str, pgds: List[int]) -> MemMappedSnapshot
     :return: Dict mapping page address to instance of PagingStructure describing the underlying page
     """
     designations = {}
-    snapshot = MemMappedSnapshot(LightSnapshot(path=dump_path, designations=designations))
+    snapshot = MemMappedSnapshot(SnapshotPagingData(path=dump_path, designations=designations))
 
     print("Extracting known paging structures.")
     last_progress = 0

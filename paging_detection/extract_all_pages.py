@@ -3,7 +3,7 @@ from typing import Dict
 import networkx as nx
 
 from paging_detection import PagingStructure, max_page_addr, PageTypes, PAGING_STRUCTURE_SIZE
-from paging_detection.mmaped import LightSnapshot, MemMappedSnapshot
+from paging_detection.mmaped import SnapshotPagingData, MemMappedSnapshot
 
 
 def build_nx_graph(pages: Dict[int, PagingStructure], max_paddr: int) -> nx.MultiDiGraph:
@@ -51,7 +51,7 @@ if __name__ == "__main__":
 
     # snapshot.pages.items() only iterates over pages for which designations are stored.
     dummy_desigs = {offset: set() for offset in range(0, snap_size, PAGING_STRUCTURE_SIZE)}
-    snapshot = MemMappedSnapshot(LightSnapshot(path=str(dump_path), designations=dummy_desigs))
+    snapshot = MemMappedSnapshot(SnapshotPagingData(path=str(dump_path), designations=dummy_desigs))
 
     pages = snapshot.pages
     max_paddr = max_page_addr(snap_size)

@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field
 from typing import Dict, Set, Iterable
 
 from paging_detection import PagingEntry, PageTypes, PAGING_STRUCTURE_SIZE, PAGING_ENTRY_SIZE, ReadableMem
-from paging_detection.mmaped import LightSnapshot
+from paging_detection.mmaped import SnapshotPagingData
 
 
 class PagingStructure(BaseModel):
@@ -66,7 +66,7 @@ if __name__ == "__main__":
         input = Snapshot.validate(json.load(f))
 
     designations = {offset: page.designations for offset, page in input.pages.items()}
-    output = LightSnapshot(path=input.path, designations=designations)
+    output = SnapshotPagingData(path=input.path, designations=designations)
 
     with open(args.output, "w") as f:
         f.write(output.json())

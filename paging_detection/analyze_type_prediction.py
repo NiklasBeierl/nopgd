@@ -6,7 +6,7 @@ from typing import Dict
 import pandas as pd
 
 from paging_detection import PageTypes, PagingStructure
-from paging_detection.mmaped import LightSnapshot, MemMappedSnapshot
+from paging_detection.mmaped import SnapshotPagingData, MemMappedSnapshot
 
 _PAGE_TYPES_ORDERED = tuple(PageTypes)
 
@@ -77,10 +77,10 @@ if __name__ == "__main__":
     if not args.csv_out:
         print("Loading page data.")
     with open(args.predictions) as f:
-        predicted = MemMappedSnapshot(LightSnapshot.validate(json.load(f)))
+        predicted = MemMappedSnapshot(SnapshotPagingData.validate(json.load(f)))
 
     with open(args.truths) as f:
-        truth = MemMappedSnapshot(LightSnapshot.validate(json.load(f)))
+        truth = MemMappedSnapshot(SnapshotPagingData.validate(json.load(f)))
 
     if not args.csv_out:
         print("Filtering out of bound entries.")

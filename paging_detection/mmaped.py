@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from paging_detection import PageTypes, PAGING_STRUCTURE_SIZE, PAGING_ENTRY_SIZE, PagingEntry
 
 
-class LightSnapshot(BaseModel):
+class SnapshotPagingData(BaseModel):
     path: str
     designations: Dict[int, Set[PageTypes]]
 
