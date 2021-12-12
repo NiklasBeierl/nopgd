@@ -1,3 +1,8 @@
+"""
+There was a time when instead of using paging_detection.mmaped.MemMappedSnapshot, all present entries from a snapshot
+where stored in the dataclasses below. That approach turned out too memory-inefficient for larger snapshots.
+This script allows converting JSON files from these dataclasses to the new dataclass.
+"""
 import json
 import struct
 from pydantic import BaseModel, Field
@@ -46,7 +51,6 @@ class PagingStructure(BaseModel):
         return cls(entries=entries, designations=set(designations))
 
 
-# Legacy class
 class Snapshot(BaseModel):
     path: str
     pages: Dict[int, PagingStructure]
