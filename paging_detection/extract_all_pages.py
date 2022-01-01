@@ -25,7 +25,7 @@ def build_nx_graph(pages: Dict[int, PagingStructure], max_paddr: int) -> nx.Mult
             print(f"{prog} % done.")
         for entry_offset, entry in page.entries.items():
             if entry.target <= max_paddr:
-                graph.add_edge(page_offset, entry.target, entry_offset)
+                graph.add_edge(page_offset, entry.target, offset=entry_offset)
 
     return graph
 
