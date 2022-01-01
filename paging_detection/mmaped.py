@@ -103,7 +103,7 @@ class PagesView:
 
 
 class MemMappedSnapshot:
-    def __init__(self, snapshot: LightSnapshot):
+    def __init__(self, snapshot: SnapshotPagingData):
         self.snapshot = snapshot
         self.designations = snapshot.designations
         self.path = snapshot.path
